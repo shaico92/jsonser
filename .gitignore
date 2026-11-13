@@ -1,0 +1,6 @@
+build*/
+__pycache__/
+*.json.tmp
+player.json
+samples_archive/
+save_dir/

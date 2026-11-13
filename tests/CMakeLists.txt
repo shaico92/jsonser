@@ -1,0 +1,6 @@
+foreach(name writer archive types segmented)
+  add_executable(test_${name} test_${name}.cpp)
+  target_link_libraries(test_${name} PRIVATE jsonser::jsonser)
+  jsonser_warnings(test_${name})
+  add_test(NAME ${name} COMMAND test_${name})
+endforeach()
