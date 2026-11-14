@@ -327,6 +327,65 @@ TEST(to_json_fragment) {
     CHECK_EQ(jsonser::to_json(Point{1, 2}), "{\"x\":1,\"y\":2}");
 }
 
+// ---- loading speed-ups: read the stream into a buffer, move strings out of owned DOMs --------
+TEST(load_from_middle_of_stream) {
+    // The archive reads from the stream's current position, not from the start.
+    std::stringstream ss;
+    ss << "IGNORED" << save_doc("p", Point{3, 4});
+    ss.ignore(7);
+    jsonser::json_iarchive ia(ss);
+    Point p;
+    ia >> jsonser::make_nvp("p", p);
+    CHECK(p == (Point{3, 4}));
+}
+
+TEST(load_from_unseekable_stream) {
+    struct no_seek : std::stringbuf {  // like a pipe: seeking fails
+        using std::stringbuf::stringbuf;
+        pos_type seekoff(off_type, std::ios::seekdir, std::ios::openmode) override { return pos_type(-1); }
+        pos_type seekpos(pos_type, std::ios::openmode) override { return pos_type(-1); }
+    };
+    std::string big(200000, 'x');  // bigger than one 64 KB read chunk
+    no_seek buf(save_doc("s", big));
+    std::istream is(&buf);
+    jsonser::json_iarchive ia(is);
+    std::string back;
+    ia >> jsonser::make_nvp("s", back);
+    CHECK(back == big);
+}
+
+struct ReadsTwice {  // a load() that reads the same field twice
+    std::string a, b;
+    template <class Ar>
+    void serialize(Ar& ar, unsigned) {
+        ar & jsonser::make_nvp("name", a);
+        if constexpr (Ar::is_loading::value) ar & jsonser::make_nvp("name", b);
+    }
+};
+
+TEST(string_read_twice_from_stream_is_a_clear_error) {
+    // A stream archive moves each string out of its JSON, so a second read fails loudly
+    // instead of quietly giving "".
+    ReadsTwice r;
+    r.a = "Ka";
+    std::string s = save_doc("r", r);
+    ReadsTwice back;
+    CHECK_THROWS_WITH(load_doc(s, "r", back), "data.r.name: expected a string, got a string that was already loaded");
+}
+
+TEST(caller_dom_is_not_modified) {
+    // An archive over a DOM you pass in copies strings, so the DOM stays intact.
+    ReadsTwice r;
+    r.a = "Ka";
+    const jsonser::json doc = jsonser::json::parse(save_doc("r", r));
+    jsonser::json_iarchive ia(doc);
+    ReadsTwice back;
+    ia >> jsonser::make_nvp("r", back);
+    CHECK_EQ(back.a, "Ka");
+    CHECK_EQ(back.b, "Ka");
+    CHECK_EQ(doc["data"]["r"]["name"].get<std::string>(), "Ka");
+}
+
 // Boost spellings of the direction flags all compile.
 static_assert(jsonser::json_iarchive::is_loading::value && !jsonser::json_iarchive::is_saving::value);
 static_assert(jsonser::json_oarchive::is_saving::value && !jsonser::json_oarchive::is_loading::value);

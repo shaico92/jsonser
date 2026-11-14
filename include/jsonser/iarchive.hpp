@@ -32,8 +32,30 @@ inline version_map read_types(const json& types_node) {
             if (it.value().is_number_unsigned()) m.emplace(it.key(), it.value().get<unsigned>());
     return m;
 }
+
+/// Reads the rest of a stream into one string. nlohmann parses a contiguous buffer much faster
+/// than it reads an std::istream character by character, so every parse goes through this.
+inline std::string read_all(std::istream& is) {
+    std::string text;
+    std::streambuf* sb = is.rdbuf();
+    if (!sb) return text;
+    // Seekable (a file): size the string once. Otherwise grow it chunk by chunk.
+    const auto here = sb->pubseekoff(0, std::ios::cur, std::ios::in);
+    const auto end = sb->pubseekoff(0, std::ios::end, std::ios::in);
+    if (here != std::streampos(-1) && end != std::streampos(-1) && end >= here) {
+        sb->pubseekpos(here, std::ios::in);
+        text.resize(static_cast<std::size_t>(end - here));
+        text.resize(static_cast<std::size_t>(sb->sgetn(text.data(), static_cast<std::streamsize>(text.size()))));
+    }
+    char chunk[1 << 16];
+    for (std::streamsize got; (got = sb->sgetn(chunk, sizeof chunk)) > 0;) text.append(chunk, static_cast<std::size_t>(got));
+    is.setstate(std::ios::eofbit);
+    return text;
+}
+
 inline const char* json_type_name(const json& n) {
     switch (n.type()) {
+        case json::value_t::discarded: return "a string that was already loaded (each string is read once)";
         case json::value_t::null: return "null";
         case json::value_t::object: return "an object";
         case json::value_t::array: return "an array";
@@ -54,12 +76,15 @@ public:
     using is_loading = std::true_type;
 
     /// Document mode: parses the whole stream (a file written by json_oarchive).
+    /// The archive owns this DOM, so strings are moved out of it instead of copied.
     explicit json_iarchive(std::istream& is) {
         try {
-            own_doc_ = json::parse(is);
+            const std::string text = detail::read_all(is);  // freed before loading starts
+            own_doc_ = json::parse(text);
         } catch (const json::exception& e) {
             throw archive_error(std::string("jsonser: invalid JSON: ") + e.what());
         }
+        consume_ = true;
         init_document();
     }
 
@@ -212,6 +237,25 @@ public:
         return node().get_ref<const std::string&>();
     }
 
+    /// Loads the current string into `s`. When the archive may consume its DOM, the string is
+    /// moved out (no copy) and the node is marked as used, so reading it again is an error
+    /// instead of silently giving "". Otherwise it is copied.
+    void read_string_into(std::string& s) {
+        if (!node().is_string()) fail(std::string("expected a string, got ") + detail::json_type_name(node()));
+        if (consume_) {
+            // const_cast is safe: consume_ is only set for DOMs that are not const objects.
+            json& n = const_cast<json&>(node());
+            s = std::move(n.get_ref<std::string&>());
+            n = json(json::value_t::discarded);
+        } else {
+            s = node().get_ref<const std::string&>();
+        }
+    }
+
+    /// Lets the archive move strings out of the DOM it reads (faster; the DOM is left partly
+    /// emptied). Use only for a non-const DOM you throw away after loading.
+    void consume_dom(bool on = true) { consume_ = on; }
+
     /// Throws archive_error with the JSON path of the current value, e.g. `data.players[3].hp: ...`
     [[noreturn]] void fail(const std::string& msg) const { throw archive_error("jsonser: " + path() + ": " + msg); }
 
@@ -299,6 +343,7 @@ private:
     version_map own_types_;
     const version_map* types_ = &own_types_;
     bool document_ = false;
+    bool consume_ = false;  // may move strings out of the DOM (it is ours and thrown away)
     std::string root_name_;
     std::vector<const json*> stack_;
     std::vector<path_elem> path_;

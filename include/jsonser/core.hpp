@@ -270,7 +270,7 @@ struct serializer<std::string> {
     }
     template <class Ar>
     static void load(Ar& ar, std::string& s) {
-        s = ar.read_string();
+        ar.read_string_into(s);  // moves the string out of the parsed JSON when it can
     }
 };
 
