@@ -18,7 +18,7 @@ Each test file is its own program (`build/<preset>/tests/.../test_<name>`). Run 
 | File | Covers |
 |---|---|
 | [`test_writer.cpp`](test_writer.cpp) | The streaming JSON writer: escaping, UTF-8 validation, shortest round-trip numbers, NaN/Inf, pretty-printing, CRC-32 and byte counts |
-| [`test_archive.cpp`](test_archive.cpp) | Archives: named values, the `types` table, **versioning both ways** (old file with new code and the reverse), missing and unknown fields, split save/load, `base_object`, private members, error messages with JSON paths, Boost-style `is_loading::value` / `is_saving::value` |
+| [`test_archive.cpp`](test_archive.cpp) | Archives: named values, the `types` table, **versioning both ways** (old file with new code and the reverse), missing and unknown fields, split `json_save`/`json_load`, `base_object`, private members, error messages with JSON paths, Boost-style `is_loading::value` / `is_saving::value`, and **separation from Boost** (a plain `serialize()` is never called) |
 | [`test_types.cpp`](test_types.cpp) | Every supported type: sequences, maps (string, int and other keys), pair/tuple/optional/variant, base64, `unique_ptr`, `shared_ptr` sharing and cycles, polymorphic pointers, **raw pointers** (sharing, cycles, polymorphism, mixing with `shared_ptr`) |
 | [`test_segmented.cpp`](test_segmented.cpp) | Segmented archives: a large stream round-trip, `read_at`, segment files as JSON lines, CRC corruption detection, re-formatted segments, incomplete archives, overwriting, writer misuse, empty streams, unsafe file names, containers whole and streamed |
 | [`test_examples.cpp`](test_examples.cpp) | The classes in [`examples/model/`](../examples/model) round-trip correctly, so the examples stay correct |

@@ -16,7 +16,7 @@ struct Shape {
     virtual double area() const { return 0; }
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(label);
     }
 };
@@ -26,7 +26,7 @@ struct Circle : Shape {
     double area() const override { return 3.14159265 * r * r; }
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Shape>(*this) & JSONSER_NVP(r);  // base fields + own fields
     }
 };
@@ -36,7 +36,7 @@ struct Rect : Shape {
     double area() const override { return w * h; }
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Shape>(*this) & JSONSER_NVP(w) & JSONSER_NVP(h);
     }
 };
@@ -47,7 +47,7 @@ struct Node {
     std::shared_ptr<Node> next;
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(name) & JSONSER_NVP(next);
     }
 };
@@ -58,7 +58,7 @@ struct Scene {
     std::shared_ptr<Shape> selected;             // points to one of `shapes` -> saved as {"$ref":n}
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(background) & JSONSER_NVP(shapes) & JSONSER_NVP(selected);
     }
 };

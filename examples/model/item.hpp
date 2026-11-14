@@ -18,7 +18,7 @@ struct Item {
     virtual ~Item() = default;  // virtual: Items are also held as Item* that point to a Weapon
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned /*version*/) {
+    void json_serialize(Ar& ar, unsigned /*version*/) {
         ar & JSONSER_NVP(id) & JSONSER_NVP(qty);
     }
 };
@@ -33,7 +33,7 @@ struct Weapon : Item {
     Weapon(std::string id_, int damage_) : Item(std::move(id_), 1), damage(damage_) {}
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned /*version*/) {
+    void json_serialize(Ar& ar, unsigned /*version*/) {
         ar & jsonser::base_object<Item>(*this) & JSONSER_NVP(damage);
     }
 };

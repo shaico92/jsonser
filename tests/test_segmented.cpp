@@ -13,7 +13,7 @@ struct Rec {
     std::vector<int> tags;
     std::optional<double> score;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(id) & JSONSER_NVP(name) & JSONSER_NVP(tags) & JSONSER_NVP(score);
     }
     bool operator==(const Rec& o) const { return id == o.id && name == o.name && tags == o.tags && score == o.score; }
@@ -24,7 +24,7 @@ struct Header {
     std::string title;
     std::map<std::string, int> counts;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(title) & JSONSER_NVP(counts);
     }
 };
@@ -227,7 +227,7 @@ TEST(unsafe_manifest_file_names_rejected) {
 struct Box {
     std::shared_ptr<int> a, b;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(a) & JSONSER_NVP(b);
     }
 };

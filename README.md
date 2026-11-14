@@ -15,7 +15,7 @@ struct Player {
     int hp = 100;
     std::vector<Item> items;
     template <class Ar>
-    void serialize(Ar& ar, unsigned version) {
+    void json_serialize(Ar& ar, unsigned version) {
         ar & JSONSER_NVP(name) & JSONSER_NVP(hp);
         if (version >= 1) ar & JSONSER_NVP(items);
     }
@@ -125,10 +125,10 @@ Then `#include <jsonser/jsonser.hpp>` and you're done.
 | Boost | jsonser |
 |---|---|
 | `ar & BOOST_SERIALIZATION_NVP(x)` / `make_nvp` | `ar & JSONSER_NVP(x)` / `jsonser::make_nvp("name", x)` |
-| member `serialize(Ar&, const unsigned)` | same |
-| free `serialize(Ar&, T&, const unsigned)` | same; put it in **T's namespace**, where ADL finds it |
-| `BOOST_SERIALIZATION_SPLIT_MEMBER()` | `JSONSER_SPLIT_MEMBER()` |
-| `BOOST_SERIALIZATION_SPLIT_FREE(T)` | `JSONSER_SPLIT_FREE(T)`, in T's namespace |
+| member `serialize(Ar&, const unsigned)` | member `json_serialize(Ar&, const unsigned)` |
+| free `serialize(Ar&, T&, const unsigned)` | free `json_serialize(Ar&, T&, const unsigned)`, in **T's namespace**, where ADL finds it |
+| `save` / `load` + `BOOST_SERIALIZATION_SPLIT_MEMBER()` | `json_save` / `json_load` + `JSONSER_SPLIT_MEMBER()` |
+| free `save` / `load` + `BOOST_SERIALIZATION_SPLIT_FREE(T)` | free `json_save` / `json_load` + `JSONSER_SPLIT_FREE(T)`, in T's namespace |
 | `BOOST_CLASS_VERSION(T, N)` | `JSONSER_CLASS_VERSION(T, N)` at global scope. `JSONSER_CLASS_NAME_VERSION(T, "Name", N)` sets a stable name |
 | `boost::serialization::base_object<B>(*this)` | `jsonser::base_object<B>(*this)`. Base fields go into the **same** JSON object |
 | `BOOST_CLASS_EXPORT(Derived)` | `JSONSER_EXPORT(Derived, Base)` / `JSONSER_EXPORT_NAMED(Derived, Base, "name")` |
@@ -139,13 +139,38 @@ Then `#include <jsonser/jsonser.hpp>` and you're done.
 
 Every value needs a name, as in Boost's XML archive, because JSON objects have keys.
 
+### Separate from Boost: one class, two libraries
+
+jsonser **only** calls `json_serialize`, `json_save` and `json_load`. It never calls a plain `serialize()`, `save()` or `load()`, and Boost never calls the `json_` ones. So one class can use both libraries without either seeing the other's code:
+
+```cpp
+struct Player {
+    std::string name;
+    int hp = 100;
+
+    template <class Ar>                       // Boost.Serialization (binary, text, XML archives)
+    void serialize(Ar& ar, unsigned version) {
+        ar & BOOST_SERIALIZATION_NVP(name) & BOOST_SERIALIZATION_NVP(hp);
+    }
+
+    template <class Ar>                       // jsonser (JSON)
+    void json_serialize(Ar& ar, unsigned version) {
+        ar & JSONSER_NVP(name) & JSONSER_NVP(hp);
+    }
+};
+BOOST_CLASS_VERSION(Player, 1)                // each library keeps its own version
+JSONSER_CLASS_VERSION(Player, 1)
+```
+
+`BOOST_SERIALIZATION_SPLIT_MEMBER()` and `JSONSER_SPLIT_MEMBER()` can also sit in the same class: they generate different functions. A class that only has a Boost `serialize()` is **not** picked up by jsonser. You get a compile error asking for `json_serialize()`.
+
 ## Versioning
 
-Each named class's version is written **once**, in the archive's `types` table, so the objects themselves stay clean. Loading passes **the file's** version to `serialize`:
+Each named class's version is written **once**, in the archive's `types` table, so the objects themselves stay clean. Loading passes **the file's** version to `json_serialize`:
 
 ```cpp
 template <class Ar>
-void serialize(Ar& ar, unsigned version) {
+void json_serialize(Ar& ar, unsigned version) {
     ar & JSONSER_NVP(name);
     if (version < 2) {                   // old file: convert
         int hp = 100;

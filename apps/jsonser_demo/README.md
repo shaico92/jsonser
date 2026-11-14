@@ -67,12 +67,12 @@ Measured with 1,000,000 players (333 MB, six 64 MB segments, MSVC Release):
 | `PlayerV1` | an old program's class registered under the same name, `"Player"`, version 1 | |
 | `Role` | enum → its number | `"role":2` |
 | `Vec3` | custom JSON shape via a `jsonser::serializer<Vec3>` specialization | `[1.5,0,-2]` |
-| `Item` | a plain member `serialize()` | `{"id":"potion","qty":3}` |
-| `Pet` | **non-intrusive**: a free `serialize()` function, inside `std::optional` | `null` or `{...}` |
+| `Item` | a plain member `json_serialize()` | `{"id":"potion","qty":3}` |
+| `Pet` | **non-intrusive**: a free `json_serialize()` function, inside `std::optional` | `null` or `{...}` |
 | `Status` | `std::variant<Offline, Online, Banned>` with registered names | `{"i":1,"t":"Online","v":{...}}` |
 | `skills` | `std::map<std::string,int>` | `{"fire":3}` |
 | `avatar` | `std::vector<std::byte>` → base64 | `"iVBORw0..."` |
-| `Settings` | split `save()`/`load()`: the difficulty enum stored as text | `"difficulty":"hard"` |
+| `Settings` | split `json_save()`/`json_load()`: the difficulty enum stored as text | `"difficulty":"hard"` |
 | `Region` | `std::map<int, Region>`, `std::set`, vector of `Vec3` | `{"0":{...}}` |
 | `Entity` → `Npc`, `Monster`, `Chest` | polymorphic `std::shared_ptr<Entity>` with `JSONSER_EXPORT_NAMED`; `Monster::target` points at another entity | `{"$id":3,"$type":"Monster",...}`, `{"$ref":3}` |
 | `Chest::trap` | `std::unique_ptr<Item>` | `null` or `{...}` |

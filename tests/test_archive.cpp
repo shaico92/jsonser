@@ -8,7 +8,7 @@
 struct Point {
     int x = 0, y = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(x) & JSONSER_NVP(y);
     }
     bool operator==(const Point& o) const { return x == o.x && y == o.y; }
@@ -23,7 +23,7 @@ public:
 private:
     friend class jsonser::access;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::make_nvp("code", code_);
     }
     std::string code_;
@@ -34,20 +34,20 @@ struct Color {  // non-intrusive free serialize, found by ADL
     unsigned char r = 0, g = 0, b = 0;
 };
 template <class Ar>
-void serialize(Ar& ar, Color& c, unsigned) {
+void json_serialize(Ar& ar, Color& c, unsigned) {
     ar & jsonser::make_nvp("r", c.r) & jsonser::make_nvp("g", c.g) & jsonser::make_nvp("b", c.b);
 }
 
-struct Temperature {  // free split save/load: stored in Fahrenheit, used in Celsius
+struct Temperature {  // free split json_save/json_load: stored in Fahrenheit, used in Celsius
     double celsius = 0;
 };
 template <class Ar>
-void save(Ar& ar, const Temperature& t, unsigned) {
+void json_save(Ar& ar, const Temperature& t, unsigned) {
     double f = t.celsius * 9 / 5 + 32;
     ar & jsonser::make_nvp("fahrenheit", f);
 }
 template <class Ar>
-void load(Ar& ar, Temperature& t, unsigned) {
+void json_load(Ar& ar, Temperature& t, unsigned) {
     double f = 0;
     ar & jsonser::make_nvp("fahrenheit", f);
     t.celsius = (f - 32) * 5 / 9;
@@ -57,15 +57,15 @@ JSONSER_SPLIT_FREE(Temperature)
 
 enum class Mode : std::uint8_t { off = 0, on = 1, turbo = 7 };
 
-struct Settings {  // member split save/load
+struct Settings {  // member split json_save/json_load
     Mode mode = Mode::off;
     template <class Ar>
-    void save(Ar& ar, unsigned) const {
+    void json_save(Ar& ar, unsigned) const {
         std::string s = mode == Mode::on ? "on" : mode == Mode::turbo ? "turbo" : "off";
         ar & jsonser::make_nvp("mode", s);
     }
     template <class Ar>
-    void load(Ar& ar, unsigned) {
+    void json_load(Ar& ar, unsigned) {
         std::string s;
         ar & jsonser::make_nvp("mode", s);
         mode = s == "on" ? Mode::on : s == "turbo" ? Mode::turbo : Mode::off;
@@ -76,14 +76,14 @@ struct Settings {  // member split save/load
 struct Shape {
     std::string label;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(label);
     }
 };
 struct Circle : Shape {
     double radius = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Shape>(*this) & JSONSER_NVP(radius);
     }
 };
@@ -94,7 +94,7 @@ struct AccountV1 {
     std::string user;
     int balance = 0;  // whole dollars
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(user) & JSONSER_NVP(balance);
     }
 };
@@ -106,7 +106,7 @@ struct Account {
     std::string currency = "USD";  // v2: new field
     unsigned loaded_version = 99;
     template <class Ar>
-    void serialize(Ar& ar, unsigned version) {
+    void json_serialize(Ar& ar, unsigned version) {
         loaded_version = version;
         ar & JSONSER_NVP(user);
         if (version < 2) {
@@ -354,10 +354,10 @@ TEST(load_from_unseekable_stream) {
     CHECK(back == big);
 }
 
-struct ReadsTwice {  // a load() that reads the same field twice
+struct ReadsTwice {  // a json_serialize() that reads the same field twice
     std::string a, b;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::make_nvp("name", a);
         if constexpr (Ar::is_loading::value) ar & jsonser::make_nvp("name", b);
     }
@@ -390,3 +390,54 @@ TEST(caller_dom_is_not_modified) {
 static_assert(jsonser::json_iarchive::is_loading::value && !jsonser::json_iarchive::is_saving::value);
 static_assert(jsonser::json_oarchive::is_saving::value && !jsonser::json_oarchive::is_loading::value);
 static_assert(jsonser::json_iarchive::is_loading() && jsonser::json_oarchive::is_saving{});
+
+// ---- separation from Boost.Serialization ------------------------------------------------------
+// jsonser only calls json_serialize / json_save / json_load. A class can keep a Boost-style
+// serialize() next to it; jsonser never touches it (here it would not even compile with jsonser).
+namespace fakeboost {
+template <class T>
+struct nvp {  // stands in for boost::serialization::nvp, which jsonser does not accept
+    const char* n;
+    T& v;
+};
+}  // namespace fakeboost
+
+struct BothLibraries {
+    int hp = 0;
+    template <class Ar>
+    void serialize(Ar& ar, unsigned) {  // "Boost's" function: wrong for jsonser on purpose
+        ar & fakeboost::nvp<int>{"hp", hp};
+    }
+    template <class Ar>
+    void json_serialize(Ar& ar, unsigned) {
+        ar & jsonser::make_nvp("health", hp);
+    }
+};
+
+namespace legacy {
+struct OnlyBoost {
+    int hp = 0;
+    template <class Ar>
+    void serialize(Ar&, unsigned) {}
+};
+struct OnlyBoostFree {
+    int hp = 0;
+};
+template <class Ar>
+void serialize(Ar&, OnlyBoostFree&, unsigned) {}
+}  // namespace legacy
+
+TEST(boost_serialize_is_never_called) {
+    BothLibraries b;
+    b.hp = 7;
+    std::string s = save_doc("b", b);
+    CHECK(s.find("\"health\":7") != std::string::npos);
+    BothLibraries back;
+    load_doc(s, "b", back);
+    CHECK_EQ(back.hp, 7);
+}
+
+// A plain serialize() (member or free) is not a jsonser hook.
+static_assert(!jsonser::detail::has_member_serialize<jsonser::json_oarchive, legacy::OnlyBoost>::value);
+static_assert(!jsonser::adl_detail::has_free_serialize<jsonser::json_oarchive, legacy::OnlyBoostFree>::value);
+static_assert(jsonser::detail::has_member_serialize<jsonser::json_oarchive, BothLibraries>::value);

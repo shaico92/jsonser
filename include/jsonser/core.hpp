@@ -100,21 +100,27 @@ constexpr bool has_class_name() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// access: befriend it (`friend class jsonser::access;`) to keep serialize/save/load private.
+// The functions jsonser calls on YOUR types have their own names - json_serialize, json_save,
+// json_load - so they never collide with Boost.Serialization's serialize/save/load. A class can
+// have both side by side, and each library only ever calls its own. jsonser does NOT fall back
+// to a plain serialize().
+//
+// access: befriend it (`friend class jsonser::access;`) to keep json_serialize/json_save/json_load
+// private.
 // ---------------------------------------------------------------------------------------------
 class access {
 public:
     template <class Ar, class T>
-    static auto serialize(Ar& ar, T& t, unsigned v) -> decltype(t.serialize(ar, v)) {
-        return t.serialize(ar, v);
+    static auto json_serialize(Ar& ar, T& t, unsigned v) -> decltype(t.json_serialize(ar, v)) {
+        return t.json_serialize(ar, v);
     }
     template <class Ar, class T>
-    static auto save(Ar& ar, const T& t, unsigned v) -> decltype(t.save(ar, v)) {
-        return t.save(ar, v);
+    static auto json_save(Ar& ar, const T& t, unsigned v) -> decltype(t.json_save(ar, v)) {
+        return t.json_save(ar, v);
     }
     template <class Ar, class T>
-    static auto load(Ar& ar, T& t, unsigned v) -> decltype(t.load(ar, v)) {
-        return t.load(ar, v);
+    static auto json_load(Ar& ar, T& t, unsigned v) -> decltype(t.json_load(ar, v)) {
+        return t.json_load(ar, v);
     }
 };
 
@@ -122,69 +128,73 @@ namespace detail {
 template <class Ar, class T, class = void>
 struct has_member_serialize : std::false_type {};
 template <class Ar, class T>
-struct has_member_serialize<Ar, T,
-                            std::void_t<decltype(access::serialize(std::declval<Ar&>(), std::declval<T&>(), 0u))>>
+struct has_member_serialize<
+    Ar, T, std::void_t<decltype(access::json_serialize(std::declval<Ar&>(), std::declval<T&>(), 0u))>>
     : std::true_type {};
 }  // namespace detail
 
-// Nothing named serialize/save/load may be declared in namespace jsonser: these calls must find
-// the user's free functions by argument-dependent lookup.
+// Nothing named json_serialize/json_save/json_load may be declared in namespace jsonser: these
+// calls must find the user's free functions by argument-dependent lookup.
 namespace adl_detail {
 template <class Ar, class T, class = void>
 struct has_free_serialize : std::false_type {};
 template <class Ar, class T>
-struct has_free_serialize<Ar, T, std::void_t<decltype(serialize(std::declval<Ar&>(), std::declval<T&>(), 0u))>>
+struct has_free_serialize<Ar, T,
+                          std::void_t<decltype(json_serialize(std::declval<Ar&>(), std::declval<T&>(), 0u))>>
     : std::true_type {};
 
 template <class Ar, class T>
 void call_serialize(Ar& ar, T& t, unsigned v) {
-    serialize(ar, t, v);
+    json_serialize(ar, t, v);
 }
 
 template <class Ar, class T>
 void split_free(Ar& ar, T& t, unsigned v) {
     if constexpr (Ar::is_saving::value)
-        save(ar, static_cast<const T&>(t), v);
+        json_save(ar, static_cast<const T&>(t), v);
     else
-        load(ar, t, v);
+        json_load(ar, t, v);
 }
 }  // namespace adl_detail
 
 template <class Ar, class T>
 void invoke_serialize(Ar& ar, T& t, unsigned version) {
     if constexpr (detail::has_member_serialize<Ar, T>::value) {
-        access::serialize(ar, t, version);
+        access::json_serialize(ar, t, version);
     } else if constexpr (adl_detail::has_free_serialize<Ar, T>::value) {
         adl_detail::call_serialize(ar, t, version);
     } else {
         static_assert(detail::always_false<T>,
-                      "jsonser: this type has no serialize(). Add a member "
-                      "`template<class Ar> void serialize(Ar& ar, unsigned version)` (plus "
+                      "jsonser: this type has no json_serialize(). Add a member "
+                      "`template<class Ar> void json_serialize(Ar& ar, unsigned version)` (plus "
                       "`friend class jsonser::access;` if it is private), or a free "
-                      "`template<class Ar> void serialize(Ar&, T&, unsigned)` in T's namespace, or include "
-                      "the jsonser/types/*.hpp header that handles this std type.");
+                      "`template<class Ar> void json_serialize(Ar&, T&, unsigned)` in T's namespace, or "
+                      "include the jsonser/types/*.hpp header that handles this std type. (jsonser never "
+                      "calls a plain serialize(): that name belongs to Boost.Serialization.)");
     }
 }
 
 template <class Ar, class T>
 void split_member(Ar& ar, T& t, unsigned version) {
     if constexpr (Ar::is_saving::value)
-        access::save(ar, static_cast<const T&>(t), version);
+        access::json_save(ar, static_cast<const T&>(t), version);
     else
-        access::load(ar, t, version);
+        access::json_load(ar, t, version);
 }
 
-/// Inside a class: generates serialize() that calls `save(Ar&, unsigned) const` / `load(Ar&, unsigned)`.
+/// Inside a class: generates json_serialize() that calls `json_save(Ar&, unsigned) const` /
+/// `json_load(Ar&, unsigned)`. Can sit next to BOOST_SERIALIZATION_SPLIT_MEMBER() in one class.
 #define JSONSER_SPLIT_MEMBER()                                         \
     template <class JsonserAr>                                         \
-    void serialize(JsonserAr& ar, const unsigned version) {            \
+    void json_serialize(JsonserAr& ar, const unsigned version) {       \
         ::jsonser::split_member(ar, *this, version);                   \
     }
 
-/// In T's namespace: generates a free serialize() that calls free `save(ar, const T&, v)` / `load(ar, T&, v)`.
+/// In T's namespace: generates a free json_serialize() that calls free
+/// `json_save(ar, const T&, v)` / `json_load(ar, T&, v)`.
 #define JSONSER_SPLIT_FREE(T)                                          \
     template <class JsonserAr>                                         \
-    void serialize(JsonserAr& ar, T& t, const unsigned version) {      \
+    void json_serialize(JsonserAr& ar, T& t, const unsigned version) { \
         ::jsonser::adl_detail::split_free(ar, t, version);             \
     }
 
@@ -213,7 +223,7 @@ struct object_flag<T, std::void_t<decltype(serializer<T>::is_object)>>
     : std::bool_constant<serializer<T>::is_object> {};
 }  // namespace detail
 
-/// True when T is written as a JSON object of its fields (a user class with serialize()).
+/// True when T is written as a JSON object of its fields (a user class with json_serialize()).
 template <class T>
 inline constexpr bool serializes_as_object = detail::object_flag<T>::value;
 

@@ -9,7 +9,7 @@ struct MonsterV1 {
     std::string kind;
     int hp = 100;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(kind) & JSONSER_NVP(hp);
     }
 };
@@ -21,7 +21,7 @@ struct Monster {
     float health = 1.0f;
     std::vector<std::string> loot;
     template <class Ar>
-    void serialize(Ar& ar, unsigned version) {
+    void json_serialize(Ar& ar, unsigned version) {
         ar & JSONSER_NVP(kind);
         if (version < 2) {  // only taken when LOADING an old file
             int hp = 100;
