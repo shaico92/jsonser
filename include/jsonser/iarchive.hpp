@@ -129,7 +129,7 @@ public:
         return *this;
     }
 
-    /// True if the current object has a field `name` (for optional logic in load()).
+    /// True if the current object has a field `name` (for optional logic in json_load()).
     bool has_field(std::string_view name) const {
         const json& n = node();
         return n.is_object() && n.find(name) != n.end();

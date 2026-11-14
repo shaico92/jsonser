@@ -27,7 +27,7 @@ struct Player {
     //   version 2: + speed  (saved under the shorter name "spd")
     //   version 3: + stats
     template <class Ar>
-    void serialize(Ar& ar, unsigned version) {
+    void json_serialize(Ar& ar, unsigned version) {
         ar & JSONSER_NVP(name) & JSONSER_NVP(hp) & JSONSER_NVP(role) & JSONSER_NVP(inventory);
         if (version >= 2) ar & jsonser::make_nvp("spd", speed);
         if (version >= 3) ar & JSONSER_NVP(stats);

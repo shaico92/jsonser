@@ -241,7 +241,7 @@ int cmd_migrate_demo() {
     std::printf("== 2. The NEW program (Player v2) loads that v1 file\n");
     Player now = load_string<Player>(v1_file);
     std::printf("%s\n", jsonser::to_json(now, 2).c_str());
-    std::printf("   hp 45 -> health %.2f (converted in serialize() because the file says Player=v1)\n", now.health);
+    std::printf("   hp 45 -> health %.2f (converted in json_serialize() because the file says Player=v1)\n", now.health);
     std::printf("   pet, status, skills, avatar were not in the file -> kept their defaults\n\n");
 
     std::printf("== 3. The NEW program saves; the OLD program reads the v2 file\n");

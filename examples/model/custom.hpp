@@ -6,7 +6,7 @@
 #include <jsonser/jsonser.hpp>
 
 // ---------------------------------------------------------------------------------------------
-// 1) A type from a library you can't edit: write serialize() as a FREE function in its namespace.
+// 1) A type from a library you can't edit: write json_serialize() as a FREE function in its namespace.
 // ---------------------------------------------------------------------------------------------
 namespace thirdparty {
 struct Timestamp {  // pretend this comes from someone else's header
@@ -14,14 +14,14 @@ struct Timestamp {  // pretend this comes from someone else's header
 };
 
 template <class Ar>
-void serialize(Ar& ar, Timestamp& t, unsigned) {  // found by ADL: same namespace as Timestamp
+void json_serialize(Ar& ar, Timestamp& t, unsigned) {  // found by ADL: same namespace as Timestamp
     ar & jsonser::make_nvp("year", t.year) & jsonser::make_nvp("month", t.month) &
         jsonser::make_nvp("day", t.day);
 }
 }  // namespace thirdparty
 
 // ---------------------------------------------------------------------------------------------
-// 2) A free save()/load() pair, when saving and loading need different code.
+// 2) A free json_save()/json_load() pair, when saving and loading need different code.
 //    Money is stored as a readable "12.34" string instead of a number of cents.
 // ---------------------------------------------------------------------------------------------
 namespace thirdparty {
@@ -31,7 +31,7 @@ struct Money {
 };
 
 template <class Ar>
-void save(Ar& ar, const Money& m, unsigned) {
+void json_save(Ar& ar, const Money& m, unsigned) {
     const long long abs_cents = m.cents < 0 ? -m.cents : m.cents;
     std::string cents = std::to_string(abs_cents % 100);
     std::string amount = (m.cents < 0 ? "-" : "") + std::to_string(abs_cents / 100) + "." +
@@ -39,7 +39,7 @@ void save(Ar& ar, const Money& m, unsigned) {
     ar & jsonser::make_nvp("amount", amount) & jsonser::make_nvp("currency", m.currency);
 }
 template <class Ar>
-void load(Ar& ar, Money& m, unsigned) {
+void json_load(Ar& ar, Money& m, unsigned) {
     std::string amount = "0.00";
     ar & jsonser::make_nvp("amount", amount) & jsonser::make_nvp("currency", m.currency);
     const bool negative = !amount.empty() && amount[0] == '-';
@@ -48,7 +48,7 @@ void load(Ar& ar, Money& m, unsigned) {
     const long long part = dot == std::string::npos ? 0 : std::stoll(amount.substr(dot + 1));
     m.cents = (negative ? -1 : 1) * (whole * 100 + part);  // "12.34" -> 1234
 }
-JSONSER_SPLIT_FREE(Money)  // generates serialize() that calls save() or load()
+JSONSER_SPLIT_FREE(Money)  // generates json_serialize() that calls json_save() or json_load()
 }  // namespace thirdparty
 
 namespace model {
@@ -88,7 +88,7 @@ struct jsonser::serializer<model::Vec3> {
 namespace model {
 
 // ---------------------------------------------------------------------------------------------
-// 4) Private members + split save/load inside the class.
+// 4) Private members + split json_save/json_load inside the class.
 //    The difficulty enum is stored as readable text ("hard") instead of a number.
 // ---------------------------------------------------------------------------------------------
 enum class Difficulty { easy, normal, hard };
@@ -102,23 +102,23 @@ public:
     const Vec3& spawn() const { return spawn_; }
 
 private:
-    friend class jsonser::access;  // lets jsonser call the private save()/load()
+    friend class jsonser::access;  // lets jsonser call the private json_save()/json_load()
 
     template <class Ar>
-    void save(Ar& ar, unsigned) const {
+    void json_save(Ar& ar, unsigned) const {
         static const char* names[] = {"easy", "normal", "hard"};
         std::string difficulty = names[static_cast<int>(difficulty_)];
         ar & jsonser::make_nvp("world", world_) & JSONSER_NVP(difficulty) & jsonser::make_nvp("spawn", spawn_);
     }
     template <class Ar>
-    void load(Ar& ar, unsigned) {
+    void json_load(Ar& ar, unsigned) {
         std::string difficulty = "normal";
         ar & jsonser::make_nvp("world", world_) & JSONSER_NVP(difficulty) & jsonser::make_nvp("spawn", spawn_);
         difficulty_ = difficulty == "easy" ? Difficulty::easy
                     : difficulty == "hard" ? Difficulty::hard
                                            : Difficulty::normal;
     }
-    JSONSER_SPLIT_MEMBER()  // generates serialize() that calls save() or load()
+    JSONSER_SPLIT_MEMBER()  // generates json_serialize() that calls json_save() or json_load()
 
     std::string world_;
     Difficulty difficulty_ = Difficulty::normal;

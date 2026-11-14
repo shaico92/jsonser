@@ -35,7 +35,7 @@ public:
 
     // JSON: {"items":[{"$id":1,"id":"apple","qty":3}, {"$id":2,"$type":"Weapon",...}]}
     template <class Ar>
-    void serialize(Ar& ar, unsigned /*version*/) {
+    void json_serialize(Ar& ar, unsigned /*version*/) {
         if constexpr (Ar::is_loading::value)
             clear();  // loading creates NEW items - free the ones we have first
         ar & jsonser::make_nvp("items", items_);

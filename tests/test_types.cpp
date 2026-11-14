@@ -53,14 +53,14 @@ TEST(sequences) {
 struct Grid {
     int cells[2][3] = {};
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(cells);
     }
 };
 struct Img {
     std::vector<std::uint8_t> px;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::make_nvp("px", jsonser::as_base64(px));
     }
 };
@@ -116,7 +116,7 @@ TEST(pair_tuple_optional) {
 struct Cat {
     std::string name;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(name);
     }
     bool operator==(const Cat& o) const { return name == o.name; }
@@ -162,7 +162,7 @@ struct Node {
     int value = 0;
     std::shared_ptr<Node> next;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(value) & JSONSER_NVP(next);
     }
 };
@@ -171,7 +171,7 @@ struct Animal {
     virtual ~Animal() = default;
     std::string name;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(name);
     }
     virtual std::string sound() const { return "..."; }
@@ -179,7 +179,7 @@ struct Animal {
 struct Dog : Animal {
     int bones = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Animal>(*this) & JSONSER_NVP(bones);
     }
     std::string sound() const override { return "woof"; }
@@ -187,14 +187,14 @@ struct Dog : Animal {
 struct Bird : Animal {
     bool flies = true;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Animal>(*this) & JSONSER_NVP(flies);
     }
     std::string sound() const override { return "tweet"; }
 };
 struct Unregistered : Animal {
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Animal>(*this);
     }
 };
@@ -279,7 +279,7 @@ struct RawNode {
     int value = 0;
     RawNode* next = nullptr;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(value) & JSONSER_NVP(next);
     }
 };
@@ -334,7 +334,7 @@ struct Holder {
     std::shared_ptr<Node> owner;
     Node* view = nullptr;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(owner) & JSONSER_NVP(view);
     }
 };

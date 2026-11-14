@@ -75,7 +75,7 @@ save_dir/00002_players.json
 
 | C++ | JSON |
 |---|---|
-| class with `serialize` | object `{field: value, ...}`. Base-class fields sit in the same object |
+| class with `json_serialize` | object `{field: value, ...}`. Base-class fields sit in the same object |
 | bool / integers / floating | `true`/`false`, integer, number. NaN/Inf are the strings `"nan"`, `"inf"`, `"-inf"` |
 | enum | its integer value |
 | string | string |

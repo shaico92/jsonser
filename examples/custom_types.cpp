@@ -1,8 +1,8 @@
 // custom_types: control the JSON a type produces. The types are in model/custom.hpp:
-//   thirdparty::Timestamp  free serialize()         -> {"year":2026,"month":11,"day":14}
-//   thirdparty::Money      free save()/load() split -> {"amount":"12.34","currency":"EUR"}
+//   thirdparty::Timestamp  free json_serialize()    -> {"year":2026,"month":11,"day":14}
+//   thirdparty::Money      free json_save()/json_load() -> {"amount":"12.34","currency":"EUR"}
 //   model::Vec3            serializer<> specialization -> [1,2.5,-3]
-//   model::Settings        private members, save()/load() split, enum as text -> "difficulty":"hard"
+//   model::Settings        private members, json_save()/json_load(), enum as text -> "difficulty":"hard"
 #include <iostream>
 #include <sstream>
 

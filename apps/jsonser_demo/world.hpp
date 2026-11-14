@@ -27,20 +27,20 @@ struct Item {  // the plain intrusive form
     int qty = 0;
     double weight = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(id) & JSONSER_NVP(qty) & JSONSER_NVP(weight);
     }
     bool operator==(const Item&) const = default;
 };
 
-struct Pet {  // NON-intrusive: serialize() is a free function below
+struct Pet {  // NON-intrusive: json_serialize() is a free function below
     std::string name;
     std::string species;
     int level = 1;
     bool operator==(const Pet&) const = default;
 };
 template <class Ar>
-void serialize(Ar& ar, Pet& p, unsigned) {
+void json_serialize(Ar& ar, Pet& p, unsigned) {
     ar & jsonser::make_nvp("name", p.name) & jsonser::make_nvp("species", p.species) &
         jsonser::make_nvp("level", p.level);
 }
@@ -49,7 +49,7 @@ void serialize(Ar& ar, Pet& p, unsigned) {
 struct Offline {
     std::int64_t last_seen = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(last_seen);
     }
     bool operator==(const Offline&) const = default;
@@ -57,7 +57,7 @@ struct Offline {
 struct Online {
     std::string server;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(server);
     }
     bool operator==(const Online&) const = default;
@@ -66,7 +66,7 @@ struct Banned {
     std::string reason;
     std::int64_t until = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(reason) & JSONSER_NVP(until);
     }
     bool operator==(const Banned&) const = default;
@@ -90,7 +90,7 @@ struct Player {
     std::vector<std::byte> avatar;  // binary -> base64 string
 
     template <class Ar>
-    void serialize(Ar& ar, unsigned version) {
+    void json_serialize(Ar& ar, unsigned version) {
         ar & JSONSER_NVP(id) & JSONSER_NVP(name) & JSONSER_NVP(role) & JSONSER_NVP(level);
         if (version < 2) {  // reading a v1 file: convert the old field
             int hp = 100;
@@ -115,7 +115,7 @@ struct PlayerV1 {
     Vec3 pos;
     std::vector<Item> inventory;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(id) & JSONSER_NVP(name) & JSONSER_NVP(role) & JSONSER_NVP(level) & JSONSER_NVP(hp) &
             JSONSER_NVP(pos) & JSONSER_NVP(inventory);
     }
@@ -123,7 +123,7 @@ struct PlayerV1 {
 
 enum class Difficulty { easy, normal, hard };
 
-struct Settings {  // split save/load: difficulty is a readable string in the file
+struct Settings {  // split json_save/json_load: difficulty is a readable string in the file
     std::string world_name;
     std::uint32_t seed = 0;
     double gravity = 9.81;
@@ -132,14 +132,14 @@ struct Settings {  // split save/load: difficulty is a readable string in the fi
     std::array<int, 3> spawn{};
 
     template <class Ar>
-    void save(Ar& ar, unsigned) const {
+    void json_save(Ar& ar, unsigned) const {
         static const char* names[] = {"easy", "normal", "hard"};
         std::string diff = names[static_cast<int>(difficulty)];
         ar & JSONSER_NVP(world_name) & JSONSER_NVP(seed) & JSONSER_NVP(gravity) & JSONSER_NVP(pvp) &
             jsonser::make_nvp("difficulty", diff) & JSONSER_NVP(spawn);
     }
     template <class Ar>
-    void load(Ar& ar, unsigned) {
+    void json_load(Ar& ar, unsigned) {
         std::string diff = "normal";
         ar & JSONSER_NVP(world_name) & JSONSER_NVP(seed) & JSONSER_NVP(gravity) & JSONSER_NVP(pvp) &
             jsonser::make_nvp("difficulty", diff) & JSONSER_NVP(spawn);
@@ -154,7 +154,7 @@ struct Region {
     std::vector<Vec3> polygon;
     std::set<std::string> tags;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(name) & JSONSER_NVP(polygon) & JSONSER_NVP(tags);
     }
     bool operator==(const Region&) const = default;
@@ -166,7 +166,7 @@ struct Entity {
     std::uint64_t id = 0;
     Vec3 pos;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(id) & JSONSER_NVP(pos);
     }
     virtual const char* kind() const { return "Entity"; }
@@ -175,7 +175,7 @@ struct Npc : Entity {
     std::string dialog;
     std::vector<std::string> quests;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Entity>(*this) & JSONSER_NVP(dialog) & JSONSER_NVP(quests);
     }
     const char* kind() const override { return "Npc"; }
@@ -185,7 +185,7 @@ struct Monster : Entity {
     float aggro = 0.5f;
     std::shared_ptr<Entity> target;  // points at another entity in the list -> {"$ref": n}
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Entity>(*this) & JSONSER_NVP(hp) & JSONSER_NVP(aggro) & JSONSER_NVP(target);
     }
     const char* kind() const override { return "Monster"; }
@@ -194,7 +194,7 @@ struct Chest : Entity {
     std::vector<Item> loot;
     std::unique_ptr<Item> trap;  // null or an object
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & jsonser::base_object<Entity>(*this) & JSONSER_NVP(loot) & JSONSER_NVP(trap);
     }
     const char* kind() const override { return "Chest"; }
@@ -205,7 +205,7 @@ struct World {
     std::map<int, Region> regions;                  // int keys -> {"0": {...}, "1": {...}}
     std::vector<std::shared_ptr<Entity>> entities;  // polymorphic + shared
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(settings) & JSONSER_NVP(regions) & JSONSER_NVP(entities);
     }
 };
@@ -216,7 +216,7 @@ struct Meta {
     std::uint64_t seed = 0;
     std::uint64_t players = 0;
     template <class Ar>
-    void serialize(Ar& ar, unsigned) {
+    void json_serialize(Ar& ar, unsigned) {
         ar & JSONSER_NVP(app) & JSONSER_NVP(seed) & JSONSER_NVP(players);
     }
 };
