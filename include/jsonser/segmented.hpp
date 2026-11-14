@@ -166,7 +166,7 @@ inline manifest read_manifest(const fs::path& file) {
                             " - not a segmented archive, or the writer was not closed (incomplete)");
     json j;
     try {
-        j = json::parse(is);
+        j = json::parse(detail::read_all(is));
     } catch (const json::exception& e) {
         throw archive_error("jsonser: invalid manifest " + file.string() + ": " + e.what());
     }
@@ -449,7 +449,7 @@ public:
         const bool same_size = fs::file_size(file, ec) == info.bytes && !ec;
         if (line_ != "[" || !same_size) {
             std::string rest = line_ + (in_.eof() ? "" : "\n");
-            rest.append(std::istreambuf_iterator<char>(in_), std::istreambuf_iterator<char>());
+            rest += read_all(in_);
             if (verify_) crc_ = crc32{}, crc_.update(rest.data(), rest.size());
             try {
                 dom_ = json::parse(rest);
@@ -519,7 +519,7 @@ private:
     bool end() {
         if (verify_) {
             if (!dom_mode_) {  // trailing bytes after ']' are part of the file too
-                std::string rest((std::istreambuf_iterator<char>(in_)), std::istreambuf_iterator<char>());
+                const std::string rest = read_all(in_);
                 crc_.update(rest.data(), rest.size());
             }
             if (crc_.value() != info_.crc32)
@@ -603,9 +603,10 @@ private:
             ++seg_;
         }
         std::string path = entry_->name + "[" + std::to_string(index_) + "]";
-        if (!ar_)
+        if (!ar_) {
             ar_ = std::make_unique<json_iarchive>(node_, *types_, std::move(path));
-        else
+            ar_->consume_dom();  // node_ is replaced by the next record anyway
+        } else
             ar_->reset_root(node_, std::move(path));
         value_ = T{};  // fields missing from this record must not keep the previous record's values
         ar_->load_value(value_);
@@ -643,7 +644,7 @@ public:
         fs::path file = dir_ / s.file;
         std::ifstream is(file, std::ios::binary);
         if (!is) throw archive_error("jsonser: missing segment file " + file.string());
-        std::string text((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
+        std::string text = detail::read_all(is);
         if (opt_.verify_crc) {
             crc32 c;
             c.update(text.data(), text.size());
@@ -657,7 +658,9 @@ public:
         } catch (const json::exception& ex) {
             throw archive_error("jsonser: segment " + s.file + ": invalid JSON: " + ex.what());
         }
+        text = std::string();  // only the parsed DOM is needed from here on
         json_iarchive ar(root, m_.types, std::string(name));
+        ar.consume_dom();  // `root` is ours and thrown away: move strings out of it
         ar.load_value(out);
     }
     template <class T>
@@ -700,6 +703,7 @@ public:
         if (!cur.next(node)) throw archive_error("jsonser: " + e.name + "[" + std::to_string(index) + "] not found");
         if (opt_.verify_on_read_at) cur.drain_and_verify();
         json_iarchive ar(node, m_.types, e.name + "[" + std::to_string(index) + "]");
+        ar.consume_dom();
         ar.load_value(out);
     }
 
