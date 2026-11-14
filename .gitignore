@@ -4,3 +4,8 @@ __pycache__/
 player.json
 samples_archive/
 save_dir/
+out/
+.vs/
+.vscode/
+CMakeUserPresets.json
+vcpkg_installed/

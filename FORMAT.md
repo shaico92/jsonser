@@ -87,7 +87,7 @@ save_dir/00002_players.json
 | variant | `{"i": index, "t": "TypeName" (optional), "v": value}` |
 | byte vector | base64 string (RFC 4648; readers also accept base64url) |
 | unique_ptr | `null`, the value, or for a derived class `{"$type": "Name", ...fields}` |
-| shared_ptr | `null`; first time `{"$id": n, ["$type": "Name"], ...fields}`; later `{"$ref": n}`. A non-object pointee is `{"$id": n, "$val": value}` |
+| shared_ptr, raw pointer | `null`; first time `{"$id": n, ["$type": "Name"], ...fields}`; later `{"$ref": n}`. A non-object pointee is `{"$id": n, "$val": value}` |
 
 - **Number ranges:** integers are written exactly, up to 64 bits. JavaScript readers lose precision above 2^53.
 - **Pointer ids:**

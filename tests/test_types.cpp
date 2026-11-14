@@ -273,3 +273,83 @@ TEST(polymorphic_pointers) {
     CHECK_THROWS_WITH(load_doc(R"({"data":{"v":{"$type":"Cow"}}})", "v", x), "unknown \"$type\" 'Cow'");
     CHECK_THROWS_WITH(load_doc(R"({"data":{"v":{"$ref":4}}})", "v", x), "points to no earlier");
 }
+
+// ---- raw pointers ------------------------------------------------------------------------------
+struct RawNode {
+    int value = 0;
+    RawNode* next = nullptr;
+    template <class Ar>
+    void serialize(Ar& ar, unsigned) {
+        ar & JSONSER_NVP(value) & JSONSER_NVP(next);
+    }
+};
+
+TEST(raw_pointer_sharing_and_null) {
+    RawNode a{1};
+    std::vector<RawNode*> v{&a, &a, nullptr};
+    CHECK_EQ(jsonser::to_json(v), "[{\"$id\":1,\"value\":1,\"next\":null},{\"$ref\":1},null]");
+    std::vector<RawNode*> back;
+    load_doc(save_doc("v", v), "v", back);
+    CHECK(back.size() == 3 && back[0] && back[0] == back[1] && !back[2]);
+    CHECK(back[0] != &a);  // a new object was allocated
+    CHECK_EQ(back[0]->value, 1);
+    delete back[0];
+}
+
+TEST(raw_pointer_cycle) {
+    RawNode a{1}, b{2};
+    a.next = &b;
+    b.next = &a;
+    RawNode* p = &a;
+    RawNode* back = nullptr;
+    load_doc(save_doc("p", p), "p", back);
+    CHECK(back && back->next && back->next->next == back);
+    CHECK_EQ(back->next->value, 2);
+    delete back->next;
+    delete back;
+}
+
+TEST(raw_pointer_polymorphic_and_values) {
+    Dog d;
+    d.name = "rex";
+    d.bones = 4;
+    std::vector<Animal*> zoo{&d, nullptr, &d};
+    std::vector<Animal*> back;
+    load_doc(save_doc("z", zoo), "z", back);
+    CHECK_EQ(back[0]->sound(), "woof");
+    CHECK_EQ(static_cast<Dog*>(back[0])->bones, 4);
+    CHECK(back[0] == back[2] && !back[1]);
+    delete back[0];
+
+    int i = 7;
+    int* ip = &i;
+    CHECK_EQ(jsonser::to_json(ip), "{\"$id\":1,\"$val\":7}");
+    int* ib = nullptr;
+    load_doc(save_doc("i", ip), "i", ib);
+    CHECK(ib && *ib == 7);
+    delete ib;
+}
+
+struct Holder {
+    std::shared_ptr<Node> owner;
+    Node* view = nullptr;
+    template <class Ar>
+    void serialize(Ar& ar, unsigned) {
+        ar & JSONSER_NVP(owner) & JSONSER_NVP(view);
+    }
+};
+
+TEST(raw_pointer_borrows_shared_ptr) {
+    Holder h;
+    h.owner = std::make_shared<Node>();
+    h.owner->value = 9;
+    h.view = h.owner.get();
+    auto back = round_trip(h);
+    CHECK(back.owner && back.view == back.owner.get());  // raw pointer borrows, nothing to delete
+
+    // the reverse (raw first, shared_ptr $ref's it) can't be owned safely -> clear error
+    std::tuple<Node*, std::shared_ptr<Node>> rev;
+    CHECK_THROWS_WITH(load_doc(R"({"data":{"v":[{"$id":1,"value":1,"next":null},{"$ref":1}]}})", "v", rev),
+                      "first loaded through a raw pointer");
+    delete std::get<0>(rev);
+}

@@ -112,7 +112,7 @@ struct Account {
         if (version < 2) {
             int balance = 0;
             ar & JSONSER_NVP(balance);
-            if constexpr (Ar::is_loading) cents = std::int64_t(balance) * 100;
+            if constexpr (Ar::is_loading::value) cents = std::int64_t(balance) * 100;
         } else {
             ar & JSONSER_NVP(cents) & JSONSER_NVP(currency);
         }
@@ -326,3 +326,8 @@ TEST(nan_round_trip) {
 TEST(to_json_fragment) {
     CHECK_EQ(jsonser::to_json(Point{1, 2}), "{\"x\":1,\"y\":2}");
 }
+
+// Boost spellings of the direction flags all compile.
+static_assert(jsonser::json_iarchive::is_loading::value && !jsonser::json_iarchive::is_saving::value);
+static_assert(jsonser::json_oarchive::is_saving::value && !jsonser::json_oarchive::is_loading::value);
+static_assert(jsonser::json_iarchive::is_loading() && jsonser::json_oarchive::is_saving{});

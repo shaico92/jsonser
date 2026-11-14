@@ -143,7 +143,7 @@ void call_serialize(Ar& ar, T& t, unsigned v) {
 
 template <class Ar, class T>
 void split_free(Ar& ar, T& t, unsigned v) {
-    if constexpr (Ar::is_saving)
+    if constexpr (Ar::is_saving::value)
         save(ar, static_cast<const T&>(t), v);
     else
         load(ar, t, v);
@@ -168,7 +168,7 @@ void invoke_serialize(Ar& ar, T& t, unsigned version) {
 
 template <class Ar, class T>
 void split_member(Ar& ar, T& t, unsigned version) {
-    if constexpr (Ar::is_saving)
+    if constexpr (Ar::is_saving::value)
         access::save(ar, static_cast<const T&>(t), version);
     else
         access::load(ar, t, version);

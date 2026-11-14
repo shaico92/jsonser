@@ -1,4 +1,4 @@
-foreach(name basic versioning segmented)
+foreach(name basic pointers custom_types versioning segmented)
   add_executable(example_${name} ${name}.cpp)
   target_link_libraries(example_${name} PRIVATE jsonser::jsonser)
   jsonser_warnings(example_${name})

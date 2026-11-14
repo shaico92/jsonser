@@ -224,6 +224,9 @@ struct serializer<std::shared_ptr<T>> {
             if (!t) ar.fail("\"$ref\": " + ref->dump() + " points to no earlier \"$id\"");
             if (t->type != std::type_index(typeid(T)))
                 ar.fail("\"$ref\" object was loaded through a different pointer type");
+            if (!t->owning)
+                ar.fail("\"$ref\" object was first loaded through a raw pointer, so a shared_ptr can't own it - "
+                        "make the shared_ptr come first, or use one kind of pointer for this object");
             p = std::static_pointer_cast<T>(t->ptr);
             return;
         }
@@ -237,10 +240,63 @@ struct serializer<std::shared_ptr<T>> {
     }
 };
 
+// Raw pointers, as in Boost: tracked like shared_ptr ({"$id":n,...} first, then {"$ref":n}), so
+// several pointers to one object - and cycles - come back as one object.
+// LOADING ALLOCATES with `new` (or the registered Derived for "$type"): the program owns the
+// result and must delete it. Load into a null pointer; a non-null one is overwritten, not freed.
+// A raw pointer may $ref an object a shared_ptr loaded earlier (it borrows it), not the reverse.
 template <class T>
 struct serializer<T*> {
-    static_assert(detail::always_false<T>,
-                  "jsonser: raw pointers are not serialized - use std::unique_ptr or std::shared_ptr");
+    static_assert(!std::is_same_v<std::remove_cv_t<T>, char> && !std::is_same_v<std::remove_cv_t<T>, wchar_t>,
+                  "jsonser: char* is ambiguous (C string or one char?) - use std::string");
+    static_assert(!std::is_void_v<T>, "jsonser: void* can't be serialized");
+    using U = std::remove_cv_t<T>;
+
+    static void save(json_oarchive& ar, T* const& p) {
+        auto& w = ar.out();
+        if (!p) {
+            w.value_null();
+            return;
+        }
+        auto [id, first] = ar.track(detail::most_derived<U>(p));
+        if (!first) {
+            w.begin_object();
+            w.key("$ref");
+            w.value_uint(id);
+            w.end_object();
+            return;
+        }
+        detail::save_pointee<U>(ar, p, [&w, id = id] {
+            w.key("$id");
+            w.value_uint(id);
+        });
+    }
+    static void load(json_iarchive& ar, T*& p) {
+        const auto& n = ar.node();
+        if (n.is_null()) {
+            p = nullptr;
+            return;
+        }
+        if (!n.is_object()) ar.fail("expected a pointer object, got " + std::string(detail::json_type_name(n)));
+        auto ref = n.find("$ref");
+        if (ref != n.end()) {
+            if (!ref->is_number_unsigned()) ar.fail("\"$ref\" must be an unsigned integer");
+            auto* t = ar.find_tracked(ref->template get<std::uint64_t>());
+            if (!t) ar.fail("\"$ref\": " + ref->dump() + " points to no earlier \"$id\"");
+            if (t->type != std::type_index(typeid(U)))
+                ar.fail("\"$ref\" object was loaded through a different pointer type");
+            p = static_cast<U*>(t->ptr.get());
+            return;
+        }
+        const typename poly_registry<U>::entry* used;
+        U* obj = detail::create_for<U>(ar, used).release();
+        auto id = n.find("$id");
+        if (id != n.end() && id->is_number_unsigned())  // track BEFORE loading: cycles can $ref it
+            ar.add_tracked(id->template get<std::uint64_t>(), std::shared_ptr<void>(obj, [](void*) {}),
+                           std::type_index(typeid(U)), /*owning=*/false);
+        p = obj;  // set first: if loading the fields throws, the half-loaded object is still reachable
+        detail::load_pointee<U>(ar, obj, used);
+    }
 };
 
 }  // namespace jsonser

@@ -95,7 +95,7 @@ struct Player {
         if (version < 2) {  // reading a v1 file: convert the old field
             int hp = 100;
             ar & JSONSER_NVP(hp);
-            if constexpr (Ar::is_loading) health = static_cast<float>(hp) / 100.0f;
+            if constexpr (Ar::is_loading::value) health = static_cast<float>(hp) / 100.0f;
         } else {
             ar & JSONSER_NVP(health);
         }

@@ -63,8 +63,9 @@ struct oarchive_options {
 
 class json_oarchive {
 public:
-    static constexpr bool is_saving = true;
-    static constexpr bool is_loading = false;
+    // Boost-compatible: Ar::is_saving::value, or Ar::is_saving() / Ar::is_saving{} as a bool.
+    using is_saving = std::true_type;
+    using is_loading = std::false_type;
 
     using options = oarchive_options;
 

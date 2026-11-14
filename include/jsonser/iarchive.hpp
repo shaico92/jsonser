@@ -49,8 +49,9 @@ inline const char* json_type_name(const json& n) {
 
 class json_iarchive {
 public:
-    static constexpr bool is_saving = false;
-    static constexpr bool is_loading = true;
+    // Boost-compatible: Ar::is_loading::value, or Ar::is_loading() / Ar::is_loading{} as a bool.
+    using is_saving = std::false_type;
+    using is_loading = std::true_type;
 
     /// Document mode: parses the whole stream (a file written by json_oarchive).
     explicit json_iarchive(std::istream& is) {
@@ -227,17 +228,18 @@ public:
         return p;
     }
 
-    // ---- shared_ptr tracking -------------------------------------------------------------
+    // ---- pointer tracking ($id/$ref) ------------------------------------------------------
     struct tracked {
-        std::shared_ptr<void> ptr;
+        std::shared_ptr<void> ptr;  // non-owning (no-op deleter) when created through a raw pointer
         std::type_index type;
+        bool owning = true;
     };
     tracked* find_tracked(std::uint64_t id) {
         auto it = shared_.find(id);
         return it == shared_.end() ? nullptr : &it->second;
     }
-    void add_tracked(std::uint64_t id, std::shared_ptr<void> p, std::type_index t) {
-        shared_.insert_or_assign(id, tracked{std::move(p), t});
+    void add_tracked(std::uint64_t id, std::shared_ptr<void> p, std::type_index t, bool owning = true) {
+        shared_.insert_or_assign(id, tracked{std::move(p), t, owning});
     }
     void reset_tracking() { shared_.clear(); }
 

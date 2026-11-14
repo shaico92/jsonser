@@ -247,3 +247,32 @@ TEST(shared_pointers_are_per_record) {
     for (Box& b : r.stream<Box>("boxes")) n += (b.a == b.b && *b.a == 7);
     CHECK_EQ(n, 3);
 }
+
+TEST(containers_whole_and_streamed) {
+    auto dir = temp_dir("containers");
+    std::vector<double> big;
+    for (int i = 0; i < 5000; ++i) big.push_back(i * 0.5);
+    std::map<std::string, std::uint64_t> idx;
+    for (std::uint64_t i = 0; i < 3000; ++i) idx["k" + std::to_string(i)] = i * 100;
+    {
+        jsonser::segmented_writer w(dir, {4096});  // tiny segments: force many files
+        w.write("units", std::vector<std::string>{"c", "k"});
+        w.write("limits", std::map<std::string, int>{{"min", -40}, {"max", 80}});
+        w.write_stream("big", big);
+        w.write_stream("idx", idx);  // pairs: each line ["k0",0]
+        w.close();
+    }
+    jsonser::segmented_reader r(dir);
+    CHECK((r.read<std::vector<std::string>>("units") == std::vector<std::string>{"c", "k"}));
+    CHECK_EQ((r.read<std::map<std::string, int>>("limits").at("min")), -40);
+    CHECK(r.info().find("big")->segments.size() > 1);
+    std::vector<double> big_back;
+    for (double& v : r.stream<double>("big")) big_back.push_back(v);
+    CHECK(big_back == big);
+    CHECK_EQ(r.read_at<double>("big", 500), 250.0);
+    std::map<std::string, std::uint64_t> idx_back;
+    for (auto& kv : r.stream<std::pair<std::string, std::uint64_t>>("idx")) idx_back.insert(kv);
+    CHECK(idx_back == idx);
+    CHECK_EQ((r.read_at<std::pair<std::string, std::uint64_t>>("idx", 0).first), "k0");
+    fs::remove_all(dir);
+}

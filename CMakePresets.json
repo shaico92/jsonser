@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "vcpkg",
+      "hidden": true,
+      "description": "Uses vcpkg (set the VCPKG_ROOT environment variable) to install nlohmann-json from vcpkg.json",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "msvc",
+      "inherits": "vcpkg",
+      "displayName": "Visual Studio 2022 (x64)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "cacheVariables": { "VCPKG_TARGET_TRIPLET": "x64-windows" }
+    },
+    {
+      "name": "mingw",
+      "inherits": "vcpkg",
+      "displayName": "MinGW g++ + Ninja",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++",
+        "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+        "VCPKG_HOST_TRIPLET": "x64-mingw-static"
+      }
+    },
+    {
+      "name": "ninja",
+      "inherits": "vcpkg",
+      "displayName": "Ninja, default compiler (Linux / macOS)",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "msvc", "configurePreset": "msvc", "configuration": "Release" },
+    { "name": "mingw", "configurePreset": "mingw" },
+    { "name": "ninja", "configurePreset": "ninja" }
+  ],
+  "testPresets": [
+    { "name": "msvc", "configurePreset": "msvc", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "mingw", "configurePreset": "mingw", "output": { "outputOnFailure": true } },
+    { "name": "ninja", "configurePreset": "ninja", "output": { "outputOnFailure": true } }
+  ]
+}
